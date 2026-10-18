@@ -1,0 +1,12 @@
+# Credentials: never commit
+*.p8
+*.pem
+*.key
+rsa_key.pub
+register_key.sql
+
+# Query output (contains business data)
+*.csv
+rm-dashboard/rm_dashboard.html
+
+__pycache__/
