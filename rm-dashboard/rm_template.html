@@ -1,0 +1,382 @@
+<title>RM Last-Mile Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: header + period switch, KPI strip for the latest complete period, 2-up chart grid, then the full RM metric table */
+:root {
+  --bg: #f6f7f8; --surface: #ffffff; --fg: #12161b; --fg-2: #4b5560; --muted: #87909a;
+  --line: #e3e6ea; --axis: #c5cbd2; --accent: #1f5fa8;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+  --good: #0b7a0b; --good-bg: #e3f4e3; --warn: #8a5a00; --warn-bg: #fdf0d2; --bad: #b42828; --bad-bg: #fbe4e4;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1215; --surface: #171b20; --fg: #f1f3f5; --fg-2: #b9c1ca; --muted: #8a939d;
+    --line: #262c33; --axis: #39414a; --accent: #6ea8ef;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+    --good: #4cc44c; --good-bg: #13301a; --warn: #f2b84b; --warn-bg: #3a2c0c; --bad: #f07a7a; --bad-bg: #3d1717;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1215; --surface: #171b20; --fg: #f1f3f5; --fg-2: #b9c1ca; --muted: #8a939d;
+  --line: #262c33; --axis: #39414a; --accent: #6ea8ef;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+  --good: #4cc44c; --good-bg: #13301a; --warn: #f2b84b; --warn-bg: #3a2c0c; --bad: #f07a7a; --bad-bg: #3d1717;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: 14px; line-height: 1.45; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-inline: 16px; padding-block: 24px 48px; display: grid; gap: 24px; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-2); font-weight: 500; }
+h1 { margin: 4px 0 6px; font-size: 26px; font-weight: 600; letter-spacing: -.01em; text-wrap: balance; }
+.meta { color: var(--fg-2); font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.meta b { color: var(--fg); font-weight: 500; }
+.seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
+.seg button { font: inherit; font-weight: 500; border: 0; background: transparent; color: var(--fg-2); padding: 6px 16px; border-radius: 6px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.seg button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.kpi-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.kpi-head h2, .section h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.kpi-head span { color: var(--fg-2); font-size: 13px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.kpi { background: var(--surface); padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+.kpi .label { font-size: 12px; color: var(--fg-2); }
+.kpi .value { font-family: var(--font-mono); font-size: 24px; font-weight: 500; letter-spacing: -.02em; }
+.kpi .foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.chip { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
+.chip.good { color: var(--good); background: var(--good-bg); }
+.chip.warn { color: var(--warn); background: var(--warn-bg); }
+.chip.bad { color: var(--bad); background: var(--bad-bg); }
+.delta.up { color: var(--good); } .delta.down { color: var(--bad); }
+
+.filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.field { display: grid; gap: 4px; }
+.field label { font-size: 12px; color: var(--fg-2); }
+.field select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--axis); border-radius: 6px; padding: 6px 28px 6px 10px; min-width: 150px; }
+.field select:focus-visible, .ghost:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.ghost { font: inherit; font-size: 13px; color: var(--accent); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+.ghost:hover { background: var(--bg); }
+
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 820px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
+.card h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.card p { margin: 0; font-size: 12px; color: var(--fg-2); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--fg-2); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.chart-box { position: relative; height: 240px; }
+
+.section { display: grid; gap: 10px; }
+.table-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 100%; }
+th, td { padding: 7px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+thead th { font-weight: 500; color: var(--fg-2); font-size: 12px; background: var(--surface); }
+thead th small { display: block; color: var(--muted); font-weight: 400; }
+th.metric { text-align: left; position: sticky; left: 0; background: var(--surface); font-weight: 500; color: var(--fg); z-index: 1; box-shadow: 1px 0 0 var(--line); }
+tr.group th { text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-2); background: var(--bg); position: sticky; left: 0; }
+td { font-family: var(--font-mono); }
+td.good { color: var(--good); } td.warn { color: var(--warn); } td.bad { color: var(--bad); }
+td.empty { color: var(--muted); }
+.note { font-size: 12px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">UK last mile · Royal Mail</div>
+      <h1>RM Last-Mile Tracker</h1>
+      <div class="meta">
+        <span>Data as of <b id="asof">–</b></span>
+        <span>Refreshes daily at 08:00, 12:00, 16:00 and 20:00</span>
+      </div>
+    </div>
+  </header>
+
+  <form class="filters" id="filters" aria-label="Filters">
+    <div class="field">
+      <label for="btn-weekly">View</label>
+      <div class="seg" role="group" aria-label="View">
+        <button id="btn-weekly" type="button" aria-pressed="true" data-view="weekly">Weekly</button>
+        <button id="btn-daily" type="button" aria-pressed="false" data-view="daily">Daily</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="f-from">From</label>
+      <select id="f-from"></select>
+    </div>
+    <div class="field">
+      <label for="f-to">To</label>
+      <select id="f-to"></select>
+    </div>
+    <div class="presets" id="presets"></div>
+  </form>
+
+  <section class="section" aria-labelledby="kpi-title">
+    <div class="kpi-head">
+      <h2 id="kpi-title">Latest period</h2>
+      <span id="kpi-sub"></span>
+    </div>
+    <div class="kpis" id="kpis"></div>
+  </section>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Parcels collected and delivered</h3>
+      <div class="legend"><span><i style="background:var(--s1)"></i>Collected</span><span><i style="background:var(--s2)"></i>Delivered</span></div>
+      <div class="chart-box"><canvas id="c-volume" aria-label="Collected and delivered parcels by period"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Service rates</h3>
+      <div class="legend"><span><i style="background:var(--s1)"></i>On-time delivery</span><span><i style="background:var(--s2)"></i>Within SLA (attempted)</span><span><i style="background:var(--s3)"></i>First-attempt success</span></div>
+      <div class="chart-box"><canvas id="c-rates" aria-label="Service rates by period"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Hub scan to delivery (days)</h3>
+      <div class="legend"><span><i style="background:var(--s1)"></i>Average</span><span><i style="background:var(--s2)"></i>P90</span></div>
+      <div class="chart-box"><canvas id="c-transit" aria-label="Transit time average and P90"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Collection backlog</h3>
+      <p>Parcels landed in the UK and not yet collected by Royal Mail, at the start of each day. Weekly view shows the Sunday value.</p>
+      <div class="chart-box"><canvas id="c-backlog" aria-label="Collection backlog"></canvas></div>
+    </div>
+    <div class="card" style="grid-column: 1 / -1">
+      <h3>Exceptions</h3>
+      <div class="legend"><span><i style="background:var(--s1)"></i>Returned to sender</span><span><i style="background:var(--s2)"></i>Delivery issues</span><span><i style="background:var(--s3)"></i>Lost in transit (pickup to hub + hub to delivery)</span></div>
+      <div class="chart-box"><canvas id="c-exc" aria-label="Exceptions by period"></canvas></div>
+    </div>
+  </div>
+
+  <section class="section" aria-labelledby="tbl-title">
+    <h2 id="tbl-title">All metrics</h2>
+    <div class="table-scroll"><table id="tbl"></table></div>
+    <p class="note">Periods are by Royal Mail hub scan (pickup) date. Weeks start Sunday. Lost in transit (pickup to hub) counts parcels Royal Mail never collected, on their expected pickup date (UK arrival + 2 days). Weekly and range P90 values are the highest daily P90 in the period, matching the RM tab.</p>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const DATA = /*__DATA__*/null;
+const $ = (id) => document.getElementById(id);
+let view = "weekly";
+try { view = localStorage.getItem("rm-view") || "weekly"; } catch (e) {}
+
+const fmtInt = (v) => v == null ? "–" : Math.round(v).toLocaleString("en-GB");
+const fmtPct = (v, d = 1) => v == null ? "–" : (v * 100).toFixed(d) + "%";
+const fmtDays = (v) => v == null ? "–" : v.toFixed(2);
+const fmtUSD = (v) => v == null ? "–" : "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const dayName = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" });
+const shortDate = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+const periodLabel = (iso) => view === "weekly" ? "w/c " + shortDate(iso) : dayName(iso) + " " + shortDate(iso);
+
+function rateClass(v, good, warn) { if (v == null) return ""; return v >= good ? "good" : v >= warn ? "warn" : "bad"; }
+const RATE_BANDS = { onTimeRate: [.98, .95], onTimeAttemptRate: [.98, .95], slaRate: [.96, .92], firstAttemptRate: [.95, .9] };
+
+const ROWS = [
+  ["Volume"],
+  ["collected", "Parcels collected", fmtInt],
+  ["delivered", "Parcels delivered", fmtInt],
+  ["attempted", "Delivery attempted", fmtInt],
+  ["onTimeDelivered", "On-time delivered", fmtInt],
+  ["onTimeAttempted", "On-time delivery attempted", fmtInt],
+  ["Service"],
+  ["firstAttemptRate", "First-attempt success", fmtPct],
+  ["onTimeRate", "On-time delivery rate", fmtPct],
+  ["onTimeAttemptRate", "On-time attempted rate", fmtPct],
+  ["slaRate", "Within SLA (attempted)", fmtPct],
+  ["Speed (days)"],
+  ["arrivalToHub", "LHR arrival to hub scan", fmtDays],
+  ["transit", "Transit time", fmtDays],
+  ["transitP90", "Transit time P90", fmtDays],
+  ["transitAttempt", "Transit to delivery attempt", fmtDays],
+  ["transitAttemptP90", "Transit to attempt P90", fmtDays],
+  ["Exceptions"],
+  ["rts", "Returned to sender", fmtInt],
+  ["issues", "Parcels with delivery issues", fmtInt],
+  ["litHub", "Lost in transit: pickup to hub", fmtInt],
+  ["litHubValue", "LiT value: pickup to hub", fmtUSD],
+  ["litDelivery", "Lost in transit: hub to delivery", fmtInt],
+  ["litDeliveryValue", "LiT value: hub to delivery", fmtUSD],
+  ["litRate", "LiT rate", (v) => fmtPct(v, 2)],
+  ["backlog", "Collection backlog", fmtInt],
+];
+
+// ── Filters: a From/To range per view, newest-first like the RM tab ──
+const DEFAULT_SPAN = { weekly: 13, daily: 14 };
+let ranges = {};
+try { ranges = JSON.parse(localStorage.getItem("rm-ranges") || "{}"); } catch (e) {}
+const all = () => DATA ? DATA[view] : [];
+function range() {
+  const a = all(), r = ranges[view];
+  const ok = (p) => a.some((x) => x.period === p);
+  if (r && ok(r.from) && ok(r.to) && r.from <= r.to) return r;
+  const n = Math.min(DEFAULT_SPAN[view], a.length);
+  return { from: a[n - 1] ? a[n - 1].period : "", to: a[0] ? a[0].period : "" };
+}
+function setRange(from, to) {
+  if (from > to) [from, to] = [to, from];
+  ranges[view] = { from, to };
+  try { localStorage.setItem("rm-ranges", JSON.stringify(ranges)); } catch (e) {}
+  render();
+}
+function rows() { const { from, to } = range(); return all().filter((p) => p.period >= from && p.period <= to); }
+
+function renderFilters() {
+  const a = all(), { from, to } = range();
+  const opts = (sel) => a.map((p) => `<option value="${p.period}"${p.period === sel ? " selected" : ""}>${periodLabel(p.period)}</option>`).join("");
+  $("f-from").innerHTML = opts(from);
+  $("f-to").innerHTML = opts(to);
+  const presets = view === "weekly"
+    ? [["Last week", 2, 1], ["Last 4 weeks", 5, 1], ["All weeks", a.length, 0]]
+    : [["Yesterday", 2, 1], ["Last 7 days", 8, 1], ["Last 28 days", 29, 1]];
+  // [label, oldest index, newest index] in the newest-first list; index 0 is the current, partial period.
+  $("presets").innerHTML = presets.map(([label, o, n]) =>
+    `<button type="button" class="ghost" data-o="${Math.min(o, a.length) - 1}" data-n="${n}">${label}</button>`).join("");
+  $("presets").querySelectorAll("button").forEach((b) => b.addEventListener("click", () =>
+    setRange(a[+b.dataset.o].period, a[+b.dataset.n].period)));
+}
+
+// Totals over a set of periods, with rates re-derived from the raw sums (P90 = highest period P90, as on the RM tab).
+function aggregate(list) {
+  if (!list.length) return null;
+  const sum = (k) => list.reduce((t, p) => t + (p[k] || 0), 0);
+  const max = (k) => { const v = list.map((p) => p[k]).filter((x) => x != null); return v.length ? Math.max(...v) : null; };
+  const div = (n, d) => d ? n / d : null;
+  const t = {};
+  ["collected", "delivered", "attempted", "onTimeDelivered", "onTimeAttempted", "rts", "issues", "litHub", "litHubValue", "litDelivery", "litDeliveryValue"].forEach((k) => t[k] = sum(k));
+  t.firstAttemptRate = div(sum("firstAttemptNum"), t.delivered + t.rts + t.issues + t.litDelivery);
+  t.onTimeRate = div(t.onTimeDelivered, t.attempted);
+  t.onTimeAttemptRate = div(t.onTimeAttempted, t.attempted);
+  t.slaRate = div(sum("withinSla"), t.attempted);
+  t.arrivalToHub = div(sum("sumArrivalToHub"), t.collected);
+  t.transit = div(sum("sumTransit"), t.delivered);
+  t.transitAttempt = div(sum("sumTransitAttempt"), t.attempted);
+  t.transitP90 = max("transitP90");
+  t.transitAttemptP90 = max("transitAttemptP90");
+  t.litRate = div(t.litHub + t.litDelivery, t.collected);
+  const b = list.find((p) => p.backlog != null);
+  t.backlog = b ? b.backlog : null;
+  t.backlogDate = b ? b.period : null;
+  return t;
+}
+
+function renderKpis() {
+  const r = rows(), a = all();
+  const cur = aggregate(r);
+  const oldest = a.findIndex((p) => p.period === r[r.length - 1]?.period);
+  const prevList = oldest >= 0 ? a.slice(oldest + 1, oldest + 1 + r.length) : [];
+  const prev = prevList.length === r.length ? aggregate(prevList) : null;
+  if (!cur || !cur.collected) { $("kpis").innerHTML = '<div class="kpi"><span class="label">No collections in the selected range</span></div>'; return; }
+  const unit = view === "weekly" ? "week" : "day";
+  const span = r.length === 1 ? periodLabel(r[0].period) : `${periodLabel(r[r.length - 1].period)} to ${periodLabel(r[0].period)}`;
+  $("kpi-title").textContent = r.length === 1 ? `Selected ${unit}` : `Selected ${r.length} ${unit}s`;
+  $("kpi-sub").textContent = span + (prev ? ` · change vs previous ${r.length === 1 ? unit : r.length + " " + unit + "s"}` : "");
+  const latestBacklog = cur.backlog != null ? { backlog: cur.backlog, period: cur.backlogDate } : null;
+  const tiles = [
+    { k: "collected", label: "Collected", f: fmtInt },
+    { k: "delivered", label: "Delivered", f: fmtInt },
+    { k: "onTimeRate", label: "On-time delivery", f: fmtPct, rate: true },
+    { k: "slaRate", label: "Within SLA", f: fmtPct, rate: true },
+    { k: "firstAttemptRate", label: "First-attempt success", f: fmtPct, rate: true },
+    { k: "transitP90", label: "Transit P90 (days)", f: fmtDays, lowerBetter: true },
+  ];
+  let html = tiles.map((t) => {
+    const v = cur[t.k], pv = prev ? prev[t.k] : null;
+    let foot = "";
+    if (t.rate) {
+      const c = rateClass(v, ...RATE_BANDS[t.k]);
+      foot += `<span class="chip ${c}">${c === "good" ? "On target" : c === "warn" ? "Watch" : c === "bad" ? "Below target" : ""}</span>`;
+    }
+    if (v != null && pv != null) {
+      const d = v - pv;
+      const better = t.lowerBetter ? d < 0 : d > 0;
+      const txt = t.rate ? (d >= 0 ? "+" : "−") + Math.abs(d * 100).toFixed(1) + " pts"
+        : t.f === fmtDays ? (d >= 0 ? "+" : "−") + Math.abs(d).toFixed(2)
+        : (d >= 0 ? "+" : "−") + fmtInt(Math.abs(d));
+      foot += `<span class="delta ${d === 0 ? "" : (t.k === "collected" || t.k === "delivered") ? "" : better ? "up" : "down"}">${txt}</span>`;
+    }
+    return `<div class="kpi"><span class="label">${t.label}</span><span class="value">${t.f(v)}</span><span class="foot">${foot}</span></div>`;
+  }).join("");
+  html += `<div class="kpi"><span class="label">Collection backlog</span><span class="value">${fmtInt(latestBacklog && latestBacklog.backlog)}</span><span class="foot">${latestBacklog ? "as of " + shortDate(latestBacklog.period) : ""}</span></div>`;
+  $("kpis").innerHTML = html;
+}
+
+function renderTable() {
+  const r = rows();
+  let h = "<thead><tr><th class='metric'>Metric</th>" + r.map((p) =>
+    `<th>${view === "weekly" ? "w/c" : dayName(p.period)}<small>${shortDate(p.period)}</small></th>`).join("") + "</tr></thead><tbody>";
+  for (const row of ROWS) {
+    if (row.length === 1) { h += `<tr class="group"><th colspan="${r.length + 1}">${row[0]}</th></tr>`; continue; }
+    const [k, label, f] = row;
+    h += `<tr><th class="metric">${label}</th>` + r.map((p) => {
+      const v = p[k];
+      const cls = v == null ? "empty" : RATE_BANDS[k] ? rateClass(v, ...RATE_BANDS[k]) : "";
+      return `<td class="${cls}">${f(v)}</td>`;
+    }).join("") + "</tr>";
+  }
+  $("tbl").innerHTML = h + "</tbody>";
+}
+
+const charts = {};
+function tok(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function renderCharts() {
+  if (!window.Chart) return;
+  const r = rows().slice().reverse();
+  const firstIdx = r.findIndex((p) => p.collected > 0 || p.backlog);
+  const series = firstIdx > 0 ? r.slice(firstIdx) : r;
+  const labels = series.map((p) => view === "weekly" ? shortDate(p.period) : shortDate(p.period));
+  const C = { s1: tok("--s1"), s2: tok("--s2"), s3: tok("--s3"), fg2: tok("--fg-2"), muted: tok("--muted"), line: tok("--line"), axis: tok("--axis"), surface: tok("--surface"), fg: tok("--fg") };
+  Chart.defaults.font.family = tok("--font-sans");
+  Chart.defaults.color = C.muted;
+  const base = (yFmt, extra = {}) => ({
+    responsive: true, maintainAspectRatio: false, animation: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: { legend: { display: false }, tooltip: {
+      backgroundColor: C.surface, titleColor: C.fg, bodyColor: C.fg2, borderColor: C.axis, borderWidth: 1, padding: 10,
+      callbacks: { title: (it) => periodLabel(series[it[0].dataIndex].period), label: (c) => ` ${c.dataset.label}: ${c.raw == null ? "–" : yFmt(c.raw)}` } } },
+    scales: {
+      x: { grid: { display: false }, border: { color: C.axis }, ticks: { maxRotation: 0, autoSkipPadding: 12 } },
+      y: { grid: { color: C.line }, border: { display: false }, ticks: { callback: (v) => yFmt(v) }, ...extra },
+    },
+  });
+  const bar = (label, data, color) => ({ type: "bar", label, data, backgroundColor: color, borderRadius: { topLeft: 3, topRight: 3 }, borderSkipped: "bottom", maxBarThickness: 22, categoryPercentage: .7, barPercentage: .9 });
+  const line = (label, data, color) => ({ type: "line", label, data, borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: view === "weekly" ? 3 : 0, pointHoverRadius: 5, tension: .25, spanGaps: true });
+  const make = (id, cfg) => { if (charts[id]) charts[id].destroy(); charts[id] = new Chart($(id), cfg); };
+
+  make("c-volume", { data: { labels, datasets: [bar("Collected", series.map((p) => p.collected), C.s1), bar("Delivered", series.map((p) => p.delivered), C.s2)] }, options: base(fmtInt, { beginAtZero: true }) });
+  const rateVals = series.flatMap((p) => [p.onTimeRate, p.slaRate, p.firstAttemptRate]).filter((v) => v != null);
+  const yMin = Math.max(0, Math.floor((Math.min(...rateVals, .9) - .02) * 20) / 20);
+  make("c-rates", { data: { labels, datasets: [line("On-time delivery", series.map((p) => p.onTimeRate), C.s1), line("Within SLA", series.map((p) => p.slaRate), C.s2), line("First-attempt success", series.map((p) => p.firstAttemptRate), C.s3)] }, options: base((v) => fmtPct(v, 0), { min: yMin, max: 1 }) });
+  make("c-transit", { data: { labels, datasets: [line("Average", series.map((p) => p.transit), C.s1), line("P90", series.map((p) => p.transitP90), C.s2)] }, options: base(fmtDays, { beginAtZero: true }) });
+  make("c-backlog", { data: { labels, datasets: [bar("Collection backlog", series.map((p) => p.backlog), C.s1)] }, options: base(fmtInt, { beginAtZero: true }) });
+  make("c-exc", { data: { labels, datasets: [bar("Returned to sender", series.map((p) => p.rts), C.s1), bar("Delivery issues", series.map((p) => p.issues), C.s2), bar("Lost in transit", series.map((p) => p.litHub + p.litDelivery), C.s3)] }, options: base(fmtInt, { beginAtZero: true }) });
+}
+
+function render() {
+  document.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === view)));
+  renderFilters(); renderKpis(); renderTable(); renderCharts();
+}
+
+$("f-from").addEventListener("change", (e) => setRange(e.target.value, range().to));
+$("f-to").addEventListener("change", (e) => setRange(range().from, e.target.value));
+$("filters").addEventListener("submit", (e) => e.preventDefault());
+document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => {
+  view = b.dataset.view;
+  try { localStorage.setItem("rm-view", view); } catch (e) {}
+  render();
+}));
+if (DATA) {
+  const t = new Date(DATA.generatedAt);
+  $("asof").textContent = isNaN(t) ? DATA.generatedAt : t.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+render();
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderCharts);
+new MutationObserver(renderCharts).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+</script>
